@@ -47,9 +47,9 @@ fn create_bits_job(g_pbcm: *mut IBackgroundCopyManager) -> Result<*mut IBackgrou
     let mut job_id: GUID = unsafe { std::mem::zeroed() };
     let mut p_job: *mut IBackgroundCopyJob = unsafe { std::mem::zeroed() };
 
-    //todo: display name
+    //TODO: display name
     hr = unsafe {
-        (&mut *g_pbcm).CreateJob(&mut 1, BG_JOB_TYPE_DOWNLOAD, &mut job_id, &mut p_job)
+        (&mut *g_pbcm).CreateJob(&mut 9, BG_JOB_TYPE_DOWNLOAD, &mut job_id, &mut p_job)
     };
 
     if !SUCCEEDED(hr) {
@@ -59,11 +59,11 @@ fn create_bits_job(g_pbcm: *mut IBackgroundCopyManager) -> Result<*mut IBackgrou
     Ok(p_job)
 }
 
-fn add_file(bits_jon: *mut IBackgroundCopyJob, file_url: &str, save_path: &str) -> Result<(), String>{
+fn add_file(bits_job: *mut IBackgroundCopyJob, file_url: &str, save_path: &str) -> Result<(), String>{
     let download_url = Url::parse(file_url).unwrap().to_string();
     let hr: HRESULT;
 
-    hr = unsafe{ (&mut *bits_jon).AddFile(to_wchar(download_url.as_str()).as_ptr() , to_wchar(save_path).as_ptr())};
+    hr = unsafe{ (&mut *bits_job).AddFile(to_wchar(download_url.as_str()).as_ptr() , to_wchar(save_path).as_ptr())};
 
     if !SUCCEEDED(hr){
         return Err(format!("Failed to add file to job, with error code: {}", hr));
@@ -72,6 +72,27 @@ fn add_file(bits_jon: *mut IBackgroundCopyJob, file_url: &str, save_path: &str) 
     Ok(())
 }
 
+fn start_job(bits_job: *mut IBackgroundCopyJob) -> Result<(), String>{
+    let hr: HRESULT;
+    hr = unsafe{(&mut *bits_job).Resume()};
+
+    if !SUCCEEDED(hr){
+        return Err(format!("Failed to start the job, with error code: {}", hr));
+    }
+
+    Ok(())
+}
+
+fn complete_job(bits_job: *mut IBackgroundCopyJob) -> Result<(), String>{
+    let hr: HRESULT;
+    hr = unsafe{(&mut *bits_job).Complete()};
+
+    if !SUCCEEDED(hr){
+        return Err(format!("Failed to start the job, with error code: {}", hr));
+    }
+
+    Ok(())
+}
 
 fn to_wchar(str : &str) -> Vec<u16> {
     OsStr::new(str).encode_wide(). chain(Some(0).into_iter()).collect()
@@ -80,24 +101,17 @@ fn to_wchar(str : &str) -> Vec<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::thread::sleep;
+    use winapi::_core::time::Duration;
 
     #[test]
-    fn test_connect_to_bits() {
-        connect_to_bits().unwrap();
-    }
-
-    #[test]
-    fn test_create_bits_job() {
-        let bits_service = connect_to_bits().unwrap();
-        create_bits_job(bits_service).unwrap();
-    }
-
-    #[test]
-    fn test_add_file(){
+    fn test_bits_download(){
         // Note, you need to run this test as admin
         let bits_service = connect_to_bits().unwrap();
         let bits_job = create_bits_job(bits_service).unwrap();
-        add_file(bits_job, "http://speedtest.tele2.net/", "C:\\temp\\file_name.zip").unwrap();
-
+        add_file(bits_job.clone(), "http://speedtest.tele2.net/1MB.zip", "C:\\temp\\zip_file.zip").unwrap();
+        start_job(bits_job.clone()).unwrap();
+        sleep(Duration::from_secs(10));
+        complete_job(bits_job).unwrap();
     }
 }
